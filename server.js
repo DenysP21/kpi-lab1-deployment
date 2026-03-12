@@ -64,6 +64,91 @@ app.get("/health/ready", async (req, res) => {
   }
 });
 
+app.get("/notes", async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const rows = await conn.query("SELECT id, title FROM notes");
+
+    sendResponse(
+      req,
+      res,
+      rows,
+      (data) => `
+            <h1>Список нотаток</h1>
+            <table border="1">
+                <tr><th>ID</th><th>Заголовок</th></tr>
+                ${data.map((n) => `<tr><td>${n.id}</td><td><a href="/notes/${n.id}">${n.title}</a></td></tr>`).join("")}
+            </table>
+            <br>
+            <form action="/notes" method="POST">
+                <h3>Створити нову нотатку</h3>
+                <input type="text" name="title" placeholder="Заголовок" required><br><br>
+                <textarea name="content" placeholder="Текст нотатки" required></textarea><br><br>
+                <button type="submit">Зберегти</button>
+            </form>
+            <br><a href="/">На головну</a>
+        `,
+    );
+  } catch (err) {
+    res.status(500).send(`Помилка: ${err.message}`);
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+app.post("/notes", async (req, res) => {
+  const { title, content } = req.body;
+  if (!title || !content) return res.status(400).send("Поля обов'язкові");
+
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const result = await conn.query(
+      "INSERT INTO notes (title, content) VALUES (?, ?)",
+      [title, content],
+    );
+    if (req.accepts(["json", "html"]) === "html") {
+      res.redirect("/notes");
+    } else {
+      res.status(201).json({ id: Number(result.insertId), title, content });
+    }
+  } catch (err) {
+    res.status(500).send(`Помилка: ${err.message}`);
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+app.get("/notes/:id", async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const rows = await conn.query(
+      "SELECT id, title, content, created_at FROM notes WHERE id = ?",
+      [req.params.id],
+    );
+    if (rows.length === 0) return res.status(404).send("Нотатку не знайдено");
+
+    sendResponse(
+      req,
+      res,
+      rows[0],
+      (data) => `
+            <h1>${data.title}</h1>
+            <p><strong>ID:</strong> ${data.id}</p>
+            <p><strong>Створено:</strong> ${data.created_at}</p>
+            <hr><div>${data.content}</div><br><br>
+            <a href="/notes">Повернутися до списку</a>
+        `,
+    );
+  } catch (err) {
+    res.status(500).send(`Помилка: ${err.message}`);
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
 if (process.env.LISTEN_PID && parseInt(process.env.LISTEN_FDS, 10) > 0) {
   app.listen({ fd: 3 }, () => {
     console.log("MyWebApp is running via systemd socket activation");
