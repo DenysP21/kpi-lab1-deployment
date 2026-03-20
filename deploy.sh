@@ -5,11 +5,13 @@ echo "=== Початок розгортання Notes Service (Варіант N=
 
 # 1. Встановлення необхідних пакетів
 echo "[1/8] Встановлення залежностей (Nginx, MariaDB, Node.js)..."
-apt-get update
-apt-get install -y curl dirmngr apt-transport-https lsb-release ca-certificates nginx mariadb-server git sudo
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -yq
+apt-get install -yq curl dirmngr apt-transport-https lsb-release ca-certificates nginx mariadb-server git sudo
+
 # Встановлення Node.js 20
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt-get install -y nodejs
+apt-get install -yq nodejs
 
 # 2. Створення користувачів системи
 echo "[2/8] Створення користувачів..."
@@ -53,8 +55,8 @@ chmod 440 /etc/sudoers.d/operator
 echo "[3/8] Налаштування MariaDB..."
 systemctl enable --now mariadb
 mysql -e "CREATE DATABASE IF NOT EXISTS notes_db;"
-mysql -e "CREATE USER IF NOT EXISTS 'app'@'localhost' IDENTIFIED BY '12345678';"
-mysql -e "GRANT ALL PRIVILEGES ON notes_db.* TO 'app'@'localhost';"
+mysql -e "CREATE USER IF NOT EXISTS 'app'@'127.0.0.1' IDENTIFIED BY '12345678';"
+mysql -e "GRANT ALL PRIVILEGES ON notes_db.* TO 'app'@'127.0.0.1';"
 mysql -e "FLUSH PRIVILEGES;"
 
 # 4. Копіювання застосунку 
@@ -102,7 +104,7 @@ systemctl enable --now mywebapp.socket
 
 # 6. Налаштування Nginx (Reverse Proxy)
 echo "[6/8] Налаштування Nginx..."
-cat <<EOF > /etc/nginx/sites-available/mywebapp
+cat <<'EOF' > /etc/nginx/sites-available/mywebapp
 server {
     listen 80;
     server_name _;
@@ -113,11 +115,11 @@ server {
 
     location / {
         proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
         
         access_log /var/log/nginx/mywebapp_access.log;
         error_log /var/log/nginx/mywebapp_error.log;
